@@ -1,0 +1,130 @@
+import csv
+import os
+import argparse
+from datetime import datetime
+
+CSV_FILE = 'expenses.csv'
+
+CATEGORIES = ['Food', 'Transport', 'Entertainment', 'Utilities', 'Health', 'Other']
+
+def init_csv():
+    if not os.path.exists(CSV_FILE):
+        with open(CSV_FILE, mode='w', newline='') as file:
+            writer = csv.writer(file, delimiter='\t')  # Tab-separated values
+            writer.writerow(['Date', 'Category', 'Amount', 'Description'])
+
+
+def add_expense():
+    date_str = input("Enter date (YYYY-MM-DD) or press Enter for today: ")
+    if not date_str:
+        date_str = datetime.today().strftime('%Y-%m-%d')
+    else:
+        try:
+            datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            print("Invalid date format.")
+            return
+
+    print("Available categories:", ', '.join(CATEGORIES))
+    category = input("Enter category: ")
+    if category not in CATEGORIES:
+        print("Invalid category. Use one of:", ', '.join(CATEGORIES))
+        return
+
+    try:
+        amount = float(input("Enter amount: "))
+    except ValueError:
+        print("Amount must be a number.")
+        return
+
+    description = input("Enter description (optional): ")
+
+    with open(CSV_FILE, mode='a', newline='') as file:
+        writer = csv.writer(file, delimiter='\t')  # Tab-separated values
+        writer.writerow([date_str, category, amount, description])
+    print("Expense added successfully.")
+
+
+def read_expenses():
+    expenses = []
+    with open(CSV_FILE, mode='r') as file:
+        reader = csv.DictReader(file, delimiter='\t')
+        for row in reader:
+            row['Amount'] = float(row['Amount'])
+            row['Date'] = datetime.strptime(row['Date'], '%Y-%m-%d')
+            expenses.append(row)
+    return expenses
+
+
+def view_expenses(month=None, year=None):
+    expenses = read_expenses()
+    filtered = []
+    for exp in expenses:
+        if (month is None or exp['Date'].month == month) and (year is None or exp['Date'].year == year):
+            filtered.append(exp)
+
+    if not filtered:
+        print("No expenses found.")
+        return
+
+    print(f"{'Date':<12} {'Category':<15} {'Amount':<10} Description")
+    print("-" * 55)
+    for exp in filtered:
+        print(f"{exp['Date'].strftime('%Y-%m-%d'):<12} {exp['Category']:<15} {exp['Amount']:<10.2f} {exp['Description']}")
+
+
+def summary(month, year):
+    expenses = read_expenses()
+    filtered = [exp for exp in expenses if exp['Date'].month == month and exp['Date'].year == year]
+
+    if not filtered:
+        print("No data found for this period.")
+        return
+
+    category_totals = {}
+    daily_totals = {}
+
+    for exp in filtered:
+        category_totals[exp['Category']] = category_totals.get(exp['Category'], 0) + exp['Amount']
+        day = exp['Date'].day
+        daily_totals[day] = daily_totals.get(day, 0) + exp['Amount']
+
+    print("\nSpending Summary by Category:")
+    for cat, amt in sorted(category_totals.items()):
+        print(f"- {cat}: ₹{amt:.2f}")
+
+    print("\nDaily Spending Trend:")
+    for day in sorted(daily_totals):
+        print(f"Day {day:2}: ₹{daily_totals[day]:.2f}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Expense Tracker CLI')
+    subparsers = parser.add_subparsers(dest='command')
+
+    subparsers.add_parser('add')
+
+    view_parser = subparsers.add_parser('view')
+    view_parser.add_argument('--month', type=int)
+    view_parser.add_argument('--year', type=int)
+
+    summary_parser = subparsers.add_parser('summary')
+    summary_parser.add_argument('--month', required=True, type=int)
+    summary_parser.add_argument('--year', required=True, type=int)
+
+    args = parser.parse_args()
+
+    init_csv()
+
+    if args.command == 'add':
+        add_expense()
+    elif args.command == 'view':
+        view_expenses(month=args.month, year=args.year)
+    elif args.command == 'summary':
+        summary(args.month, args.year)
+    else:
+        parser.print_help()
+
+
+if __name__ == '__main__':
+    main()
